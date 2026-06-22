@@ -1,0 +1,21 @@
+{
+  "id": "drug-routes",
+  "name": "Drug Trafficking Routes",
+  "version": "2.0.0",
+  "description": "Full global drug supply-chain visualization: trafficking corridors, precursor flows, air & maritime routes, cartel territories, cultivation zones, lab clusters, port hotspots, street-price choropleth, interdictions and a near-real-time DEA seizure feed. Curated from UNODC, INCB, InSight Crime and DEA sources.",
+  "type": "data-layer",
+  "format": "bundle",
+  "trust": "built-in",
+  "capabilities": ["data:own", "data:read:conflict-zones", "globe:overlay", "ui:toolbar", "ui:detail-panel", "network:fetch"],
+  "category": "intelligence",
+  "icon": "Route",
+  "entry": "dist/frontend.mjs",
+  "compatibility": { "worldwideview": ">=1.0.0" },
+  "dataSource": {
+    "url": "",
+    "method": "GET",
+    "pollInterval": 0,
+    "format": "json",
+    "streamUrl": "ws://localhost:5006/stream"
+  }
+}

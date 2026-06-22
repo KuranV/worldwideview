@@ -1,0 +1,57 @@
+/*
+ * Core panel / controls styling for the Drug Trafficking Routes plugin. Plain, prefixed CSS
+ * injected at runtime (single-file bundle pattern). Namespaced `wwv-drug-` to avoid collisions.
+ */
+.wwv-drug-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 18px;
+    color: #e7ecf3;
+    font-family: inherit;
+}
+
+.wwv-drug-head { display: flex; align-items: baseline; gap: 10px; }
+.wwv-drug-title { font-size: 1.05rem; font-weight: 600; }
+.wwv-drug-sub { font-size: 0.7rem; letter-spacing: 0.04em; text-transform: uppercase; color: #8b97a6; }
+
+.wwv-drug-section-label { font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: #8b97a6; margin-top: 2px; }
+.wwv-drug-hint { text-transform: none; letter-spacing: 0; color: #6b7585; }
+
+.wwv-drug-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.wwv-drug-subwrap { display: inline-flex; align-items: center; }
+
+.wwv-drug-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px; background: rgba(255, 255, 255, 0.06);
+    color: #e7ecf3; font-size: 0.8rem; cursor: pointer;
+    transition: opacity 0.15s ease, background 0.15s ease;
+}
+.wwv-drug-chip:hover { background: rgba(255, 255, 255, 0.12); }
+.wwv-drug-chip--off { opacity: 0.4; }
+
+.wwv-drug-swatch { width: 10px; height: 10px; border-radius: 3px; box-shadow: 0 0 4px rgba(0, 0, 0, 0.5); }
+
+.wwv-drug-info {
+    margin-left: -2px; padding: 2px 5px; border: none; background: none;
+    color: #6ea8fe; font-size: 0.85rem; cursor: pointer;
+}
+.wwv-drug-info:hover { color: #9cc4ff; }
+
+.wwv-drug-controls { display: flex; flex-direction: column; gap: 7px; margin-top: 4px; }
+.wwv-drug-control { display: flex; flex-direction: column; gap: 3px; font-size: 0.78rem; color: #c4ccd6; }
+.wwv-drug-control input[type="range"] { width: 100%; accent-color: #6ea8fe; }
+.wwv-drug-control select {
+    background: rgba(255, 255, 255, 0.08); color: #e7ecf3;
+    border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 6px; padding: 4px 6px;
+}
+.wwv-drug-check { flex-direction: row; align-items: center; gap: 6px; }
+
+.wwv-drug-stats {
+    display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px;
+    padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.wwv-drug-stat { display: flex; flex-direction: column; gap: 2px; min-width: 150px; }
+.wwv-drug-stat-v { font-size: 0.85rem; font-weight: 600; color: #f1f5f9; }
+.wwv-drug-note { font-size: 0.78rem; color: #8b97a6; }

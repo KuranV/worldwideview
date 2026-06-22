@@ -1,0 +1,17 @@
+{
+  "name": "@worldwideview/wwv-plugin-drug-routes-backend",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Optional near-real-time seeder for the Drug Trafficking Routes plugin — scrapes the public DEA press-release RSS feed into mappable seizure points.",
+  "main": "index.mjs",
+  "bin": {
+    "wwv-drug-routes-seeder": "index.mjs"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.21.0"
+  }
+}

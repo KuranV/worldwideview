@@ -1,0 +1,61 @@
+{
+  "name": "@worldwideview/wwv-plugin-drug-routes",
+  "version": "2.0.0",
+  "description": "Full global drug supply-chain visualization — corridors, precursors, territories, cultivation, prices, seizures and a live DEA feed — from UNODC, INCB, InSight Crime and DEA sources",
+  "type": "module",
+  "main": "dist/frontend.mjs",
+  "module": "dist/frontend.mjs",
+  "types": "src/index.ts",
+  "files": [
+    "dist",
+    "src",
+    "data",
+    "manifest.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/silvertakana/worldwideview.git",
+    "directory": "packages/wwv-plugin-drug-routes"
+  },
+  "keywords": [
+    "worldwideview",
+    "wwv-plugin",
+    "unodc",
+    "trafficking",
+    "intelligence"
+  ],
+  "author": "WorldWideView",
+  "license": "ISC",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "worldwideview": {
+    "id": "drug-routes",
+    "type": "data-layer",
+    "format": "bundle",
+    "category": "intelligence",
+    "icon": "Route",
+    "capabilities": [
+      "data:own",
+      "data:read:conflict-zones",
+      "globe:overlay",
+      "ui:toolbar",
+      "ui:detail-panel",
+      "network:fetch"
+    ]
+  },
+  "peerDependencies": {
+    "@worldwideview/wwv-plugin-sdk": "workspace:*",
+    "cesium": "^1.142.0",
+    "react": ">=19"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@worldwideview/wwv-plugin-sdk": "workspace:*",
+    "cesium": "^1.142.0",
+    "react": "19.2.7",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.16"
+  }
+}
