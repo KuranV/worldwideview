@@ -49,6 +49,8 @@
     "local-seeders",
     "local-plugins",
     "packages/*/backend",
+    "packages/wwv-plugin-lightning",
+    "packages/wwv-plugin-drug-routes",
     "worldmonitor",
     ".worktrees",
     "tests",
