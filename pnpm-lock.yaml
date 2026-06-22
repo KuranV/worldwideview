@@ -253,6 +253,30 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@28.1.0)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4))
 
+  local-plugins/wwv-plugin-lightning:
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@worldwideview/wwv-plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/wwv-plugin-sdk
+      cesium:
+        specifier: ^1.142.0
+        version: 1.142.0
+      lucide-react:
+        specifier: ^1.17.0
+        version: 1.17.0(react@19.2.7)
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^8.0.16
+        version: 8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)
+
   packages/wwv-ci-probe:
     dependencies:
       commander:
@@ -305,33 +329,6 @@ importers:
       '@worldwideview/wwv-plugin-sdk':
         specifier: workspace:*
         version: link:../wwv-plugin-sdk
-
-  packages/wwv-plugin-drug-routes:
-    devDependencies:
-      '@types/react':
-        specifier: ^19.2.17
-        version: 19.2.17
-      '@worldwideview/wwv-plugin-sdk':
-        specifier: workspace:*
-        version: link:../wwv-plugin-sdk
-      cesium:
-        specifier: ^1.142.0
-        version: 1.142.0
-      react:
-        specifier: 19.2.7
-        version: 19.2.7
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vite:
-        specifier: ^8.0.16
-        version: 8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)
-
-  packages/wwv-plugin-drug-routes/backend:
-    dependencies:
-      ws:
-        specifier: ^8.21.0
-        version: 8.21.0
 
   packages/wwv-plugin-lightning:
     devDependencies:
