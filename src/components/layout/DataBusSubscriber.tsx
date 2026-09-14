@@ -14,6 +14,7 @@ import { pluginManager } from "@/core/plugins/PluginManager";
 import { wsClient } from "@/core/data/WsClient";
 import { resolveEngineUrl } from "@/core/data/resolveEngineUrl";
 import { fetchLocalEngineManifest } from "@/core/data/engineManifest";
+import { applyEntityBudget, resolveLayerBudget } from "@/core/data/entityBudget";
 
 /**
  * @component DataBusSubscriber
@@ -24,6 +25,7 @@ export function DataBusSubscriber() {
     const setPollingInterval = useStore((s) => s.setPollingInterval);
     const setEntities = useStore((s) => s.setEntities);
     const setEntityCount = useStore((s) => s.setEntityCount);
+    const setLayerBudget = useStore((s) => s.setLayerBudget);
     const clearEntities = useStore((s) => s.clearEntities);
     const removeLayer = useStore((s) => s.removeLayer);
     const setLayerLoading = useStore((s) => s.setLayerLoading);
@@ -50,8 +52,19 @@ export function DataBusSubscriber() {
             // Defer the state updates by one tick to prevent React "Maximum update depth exceeded"
             // errors during massive synchronous plugin loads (e.g. at boot).
             setTimeout(() => {
-                setEntities(pluginId, entities);
-                setEntityCount(pluginId, entities.length);
+                // Per-layer entity budget: truncate at the data layer (before the
+                // store) so renderer primitive cleanup never fights truncation.
+                const { pluginSettings } = useStore.getState().dataConfig;
+                const budget = resolveLayerBudget(pluginId, pluginSettings);
+                const { kept, budgetExceeded, totalCount } = applyEntityBudget(entities, budget);
+                if (budgetExceeded) {
+                    console.debug(
+                        `[DataBusSubscriber] Layer "${pluginId}" exceeded entity budget: rendering ${kept.length} of ${totalCount} (cap ${budget}).`
+                    );
+                }
+                setEntities(pluginId, kept);
+                setEntityCount(pluginId, totalCount);
+                setLayerBudget(pluginId, { budgetCap: budget, renderedCount: kept.length, budgetExceeded });
             }, 0);
         });
 
@@ -98,7 +111,7 @@ export function DataBusSubscriber() {
             unsubLoading();
             unsubError();
         };
-    }, [setPollingInterval, setEntities, setEntityCount, clearEntities, removeLayer, setLayerLoading, showErrorToast]);
+    }, [setPollingInterval, setEntities, setEntityCount, setLayerBudget, clearEntities, removeLayer, setLayerLoading, showErrorToast]);
 
     return null;
 }

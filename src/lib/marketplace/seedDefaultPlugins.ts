@@ -2,7 +2,7 @@ import { isDemo } from "@/core/edition";
 import { validateManifest } from "@/core/plugins/validateManifest";
 import { prisma } from "../db";
 import { upsertPlugin } from "./repository";
-import { getVerifiedPluginIds } from "./registryClient";
+import { getRegistryPluginList } from "./registryClient";
 
 const MARKETPLACE_URL = process.env.NEXT_PUBLIC_MARKETPLACE_URL
     || "https://marketplace.worldwideview.dev";
@@ -10,9 +10,9 @@ const MARKETPLACE_URL = process.env.NEXT_PUBLIC_MARKETPLACE_URL
 /**
  * Seed verified marketplace plugins on a fresh install.
  *
- * The signed registry (`getVerifiedPluginIds`) is the single source of truth
- * for which plugins land in a brand-new instance — there is no hard-coded
- * default list. Publish a plugin to the verified registry and it auto-seeds
+ * The signed registry (`getRegistryPluginList`) is the single source of truth.
+ * Only plugins with `autoSeed: true` are auto-installed on fresh instances.
+ * Publish a plugin with `autoSeed: true` in the registry and it auto-seeds
  * on subsequent fresh installs.
  *
  * Runs at most once per instance lifecycle: an idempotent guard
@@ -47,54 +47,71 @@ export async function seedDefaultPlugins(): Promise<void> {
             return;
         }
 
-        const verified = await getVerifiedPluginIds();
-        if (verified.size === 0) {
+        const allAutoSeed = (await getRegistryPluginList()).filter((p) => p.autoSeed);
+        if (allAutoSeed.length === 0) {
             // Registry unreachable / signature failed / empty — defer so the
             // next request retries instead of locking in an empty fresh install.
             console.warn(
-                "[DefaultPlugins] Verified registry returned empty — deferring seed, will retry next request",
+                "[DefaultPlugins] No autoSeed plugins in registry — deferring seed, will retry next request",
+            );
+            return;
+        }
+
+        // Restrict to a curated subset if DEFAULT_PLUGINS is set (comma-separated IDs)
+        const curatedList = process.env.DEFAULT_PLUGINS;
+        const autoSeedPlugins = curatedList
+            ? allAutoSeed.filter((p) => curatedList.split(",").map((s) => s.trim()).includes(p.id))
+            : allAutoSeed;
+
+        if (autoSeedPlugins.length === 0) {
+            console.warn(
+                `[DefaultPlugins] DEFAULT_PLUGINS="${curatedList}" matched zero registry plugins — deferring seed`,
             );
             return;
         }
 
         console.log(
-            `[DefaultPlugins] Fresh install detected — seeding ${verified.size} verified plugins…`,
+            `[DefaultPlugins] Fresh install detected — seeding ${autoSeedPlugins.length}/${allAutoSeed.length} auto-seed plugins${curatedList ? " (curated)" : ""}\u2026`,
         );
 
         let installed = 0;
 
-        for (const pluginId of verified) {
+        for (const plugin of autoSeedPlugins) {
             try {
-                const manifest = await fetchManifest(pluginId);
+                const manifest = await fetchManifest(plugin.id);
                 if (!manifest) continue;
 
                 // Every plugin in the verified set is by definition verified.
                 manifest.trust = "verified";
 
-                // Reconstruct CDN entry for npm-distributed plugins
+                // Reconstruct CDN entry for npm-distributed plugins. Resolve the package's
+                // real module entry via jsdelivr's +esm endpoint (reads package.json
+                // "module"/"exports"), matching the marketplace install flow. Hardcoding
+                // dist/frontend.mjs 404s for packages that ship their bundle under a
+                // different name (e.g. dist/index.esm.js or dist/index.mjs).
                 if (manifest.npmPackage) {
                     const ver = manifest.version || "1.0.0";
                     manifest.format = "bundle";
-                    manifest.entry = `https://unpkg.com/${manifest.npmPackage}@${ver}/dist/frontend.mjs`;
+                    manifest.entry = `https://cdn.jsdelivr.net/npm/${manifest.npmPackage}@${ver}/+esm`;
                 }
 
                 const validation = validateManifest(manifest);
                 if (!validation.valid) {
                     console.warn(
-                        `[DefaultPlugins] Skipping ${pluginId}: ${validation.errors.join(", ")}`,
+                        `[DefaultPlugins] Skipping ${plugin.id}: ${validation.errors.join(", ")}`,
                     );
                     continue;
                 }
 
                 await upsertPlugin(
-                    pluginId,
+                    plugin.id,
                     (manifest.version as string | undefined) || "1.0.0",
                     JSON.stringify(manifest),
                 );
                 installed += 1;
             } catch (err) {
                 console.warn(
-                    `[DefaultPlugins] Failed to seed ${pluginId}:`,
+                        `[DefaultPlugins] Failed to seed ${plugin.id}:`,
                     err,
                 );
             }
@@ -102,7 +119,7 @@ export async function seedDefaultPlugins(): Promise<void> {
 
         await markSeeded();
         console.log(
-            `[DefaultPlugins] Seeded ${installed}/${verified.size} plugins`,
+            `[DefaultPlugins] Seeded ${installed}/${autoSeedPlugins.length} plugins`,
         );
     } catch (err) {
         console.error("[DefaultPlugins] Seeder failed:", err);

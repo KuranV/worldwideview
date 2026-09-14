@@ -7,11 +7,15 @@
  * @module src/components/panels
  */
 
+import { useEffect, useState } from "react";
 import { ShieldAlert, Wrench } from "lucide-react";
 import { PluginIcon } from "@/components/common/PluginIcon";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { getFreshness } from "@/core/data/freshness";
+import { SeederEmptyChecklist } from "@/components/common/SeederEmptyChecklist";
 import { pluginManager } from "@/core/plugins/PluginManager";
 import type { WorldPlugin } from "@/core/plugins/PluginTypes";
+import type { SeederHealth } from "@/core/state/seederHealthSlice";
 import "./LayerItem.css";
 
 // ─── Category Labels ────────────────────────────────────────
@@ -69,6 +73,19 @@ function TrustIcon({ pluginId, pluginName }: { pluginId: string; pluginName: str
     return null;
 }
 
+// ─── Freshness Clock ───────────────────────────────────────
+
+/** Re-renders the freshness tier every 30s so staleness colors advance without new data. */
+function useNowMs(active: boolean): number {
+    const [nowMs, setNowMs] = useState(() => Date.now());
+    useEffect(() => {
+        if (!active) return;
+        const timer = setInterval(() => setNowMs(Date.now()), 30_000);
+        return () => clearInterval(timer);
+    }, [active]);
+    return nowMs;
+}
+
 // ─── LayerItem Component ────────────────────────────────────
 
 /**
@@ -78,6 +95,7 @@ function TrustIcon({ pluginId, pluginName }: { pluginId: string; pluginName: str
  * @property {boolean} isEnabled - Whether the layer is currently active on the globe.
  * @property {boolean} isLoading - Whether the layer is currently fetching data.
  * @property {number} entityCount - The number of entities currently rendered for this layer.
+ * @property {string} [fetchedAt] - Server-provided ISO timestamp of the latest snapshot, if any.
  * @property {boolean} [isSelected] - Whether this layer is focused in the config panel.
  * @property {function} onToggle - Callback to toggle the layer's enabled state.
  * @property {function} [onSelect] - Callback to focus the layer in the config panel.
@@ -87,9 +105,18 @@ interface LayerItemProps {
     isEnabled: boolean;
     isLoading: boolean;
     entityCount: number;
+    fetchedAt?: string;
     isSelected?: boolean;
+    /** Total entities received for this layer (pre-budget). */
+    totalEntityCount?: number;
+    /** Entities actually rendering after budget thinning. */
+    renderedCount?: number;
+    /** True when the layer's feed exceeded its entity budget. */
+    budgetExceeded?: boolean;
     onToggle: () => void;
     onSelect?: () => void;
+    /** Optional seeder health used by the 'why is my layer empty?' checklist. */
+    seederHealth?: SeederHealth;
 }
 
 /**
@@ -101,10 +128,19 @@ export function LayerItem({
     isEnabled,
     isLoading,
     entityCount,
+    fetchedAt,
     isSelected,
+    totalEntityCount,
+    renderedCount,
+    budgetExceeded,
     onToggle,
     onSelect,
+    seederHealth,
 }: LayerItemProps) {
+    // Freshness renders only when the server provided fetchedAt — graceful degradation otherwise.
+    const showFreshness = Boolean(fetchedAt) && isEnabled && !isLoading;
+    const nowMs = useNowMs(showFreshness);
+    const freshness = showFreshness ? getFreshness(fetchedAt, nowMs) : null;
     return (
       <div
         className={`layer-item ${isSelected ? "layer-item--selected" : ""}`}
@@ -125,6 +161,26 @@ export function LayerItem({
               <span className="layer-item__count">
                 {entityCount.toLocaleString()}
               </span>
+                    )}
+            {freshness && (
+              <Tooltip content={freshness.title}>
+                <span className={`layer-item__freshness layer-item__freshness--${freshness.tier}`}>
+                  {freshness.label}
+                </span>
+              </Tooltip>
+            )}
+            {isEnabled && !isLoading && budgetExceeded && (
+              <span
+                className="layer-item__budget-badge"
+                aria-label="Entity budget exceeded"
+              >
+                rendering {(renderedCount ?? entityCount).toLocaleString()} of {(totalEntityCount ?? entityCount).toLocaleString()}
+              </span>
+            )}
+            {isEnabled && !isLoading && entityCount === 0 && (
+              <div className="layer-item__empty-hint">
+                <SeederEmptyChecklist health={seederHealth} />
+              </div>
                     )}
           </div>
         </div>

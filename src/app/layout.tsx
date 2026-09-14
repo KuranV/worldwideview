@@ -3,6 +3,7 @@ import Script from "next/script";
 import "./globals.css";
 import "@/styles/hud-animations.css";
 import { LegalFooter } from "@/components/layout/LegalFooter";
+import { edition } from "@/core/edition";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -27,7 +28,7 @@ export default function RootLayout({
         {process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID && (
           <meta name="google-adsense-account" content={process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID} />
         )}
-        {process.env.NEXT_PUBLIC_WWV_EDITION === "demo" && process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID && (
+        {edition === "demo" && process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID && (
           <Script
             id="adsbygoogle"
             async
@@ -53,9 +54,9 @@ export default function RootLayout({
       </head>
       <body suppressHydrationWarning>
         {children}
-        {process.env.NEXT_PUBLIC_WWV_ANALYTICS === "true" && (
+        {process.env.NEXT_PUBLIC_WWV_ANALYTICS === "true" && process.env.NEXT_PUBLIC_ANALYTICS_SCRIPT_URL && (
           <Script
-            src="https://analytics.worldwideview.dev/script.js"
+            src={process.env.NEXT_PUBLIC_ANALYTICS_SCRIPT_URL}
             data-website-id="2c8f6c09-2651-4a2a-af99-b8cee1612b9a"
             strategy="afterInteractive"
           />

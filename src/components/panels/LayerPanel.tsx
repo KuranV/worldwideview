@@ -46,6 +46,7 @@ export function LayerPanel() {
     const setConfigPanelOpen = useStore((s) => s.setConfigPanelOpen);
     const setActiveConfigTab = useStore((s) => s.setActiveConfigTab);
     const setSelectedEntity = useStore((s) => s.setSelectedEntity);
+    const seederHealth = useStore((s) => s.seederHealth);
 
     const allPlugins = pluginManager.getAllPlugins();
     const [searchQuery, setSearchQuery] = useState("");
@@ -223,6 +224,8 @@ export function LayerPanel() {
                                     const isEnabled = layers[managed.plugin.id]?.enabled || false;
                                     const isLoading = layers[managed.plugin.id]?.loading || false;
                                     const count = (entitiesByPlugin[managed.plugin.id] || []).length;
+                                    const fetchedAt = layers[managed.plugin.id]?.fetchedAt;
+                                    const layerState = layers[managed.plugin.id];
 
                                     return (
                                       <LayerItem
@@ -231,7 +234,12 @@ export function LayerPanel() {
                                         isEnabled={isEnabled}
                                         isLoading={isLoading}
                                         entityCount={count}
+                                        fetchedAt={fetchedAt}
                                         isSelected={highlightLayerId === managed.plugin.id}
+                                        totalEntityCount={layerState?.budgetExceeded ? layerState.entityCount : undefined}
+                                        renderedCount={layerState?.budgetExceeded ? layerState.renderedCount : undefined}
+                                        budgetExceeded={layerState?.budgetExceeded}
+                                        seederHealth={seederHealth[managed.plugin.id]}
                                         onToggle={() => handleToggle(managed.plugin.id)}
                                         onSelect={() => {
                                                 const newId = highlightLayerId === managed.plugin.id ? null : managed.plugin.id;

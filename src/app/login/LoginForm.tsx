@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { isDemo } from "@/core/edition";
-import { loginAction } from "./actions";
+import { authClient } from "@/lib/auth-client";
+import { migrateLegacyUserIfNeeded } from "@/lib/auth/migrate-legacy-user";
 import styles from "../setup/setup.module.css";
 
 /** Allow relative paths or same-origin URLs only (local edition is self-contained). */
@@ -30,27 +31,38 @@ export default function LoginForm() {
         setLoading(true);
 
         const formData = new FormData(e.currentTarget);
-        let result;
-        try {
-            result = await loginAction(formData);
-        } catch {
-            setError("Something went wrong. Please try again.");
-            setLoading(false);
-            return;
-        }
+        const email = formData.get("email") as string;
+        const password = formData.get("password") as string;
 
-        if (result.success) {
-            const target = getSafeRedirect(next);
-            if (target === "/") {
-                router.push("/");
-                router.refresh();
+        const { error: signInError } = await authClient.signIn.email({
+            email,
+            password,
+            callbackURL: getSafeRedirect(next),
+        });
+
+        if (signInError) {
+            console.warn('[login] sign-in failed', { code: signInError.code, message: signInError.message });
+
+            // Try migrating legacy NextAuth user to Better Auth
+            const migrated = await migrateLegacyUserIfNeeded(email, password);
+            if (migrated) {
+                // Retry sign-in — the BetterAuthUser + account now exist
+                const { error: retryError } = await authClient.signIn.email({
+                    email,
+                    password,
+                    callbackURL: getSafeRedirect(next),
+                });
+                if (retryError) {
+                    console.warn('[login] sign-in retry failed', { code: retryError.code, message: retryError.message });
+                    setError("Sign in failed after migration. Try again.");
+                }
+                // On retry success, Better Auth redirects
             } else {
-                window.location.href = target;
+                setError("Sign in failed. Check your credentials and try again.");
             }
-        } else {
-            setError(result.error ?? "Login failed.");
             setLoading(false);
         }
+        // On success, Better Auth redirects to callbackURL
     }
 
     return (
@@ -62,14 +74,14 @@ export default function LoginForm() {
 
           <form onSubmit={handleSubmit} method="post" className={styles.form}>
             <label className={styles.label} htmlFor="email">
-              {isDemo ? "Username" : "Email"}
+              Email
               <input
                 id="email"
                 name="email"
-                type={isDemo ? "text" : "email"}
+                type="email"
                 required
                 className={styles.input}
-                placeholder={isDemo ? "admin" : "admin@example.com"}
+                placeholder={isDemo ? "admin@worldwideview.local" : "admin@example.com"}
               />
             </label>
 

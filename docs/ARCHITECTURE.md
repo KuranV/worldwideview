@@ -106,9 +106,9 @@ The `DataBus` is a custom typed pub/sub singleton (see [`src/core/data/DataBus.t
 
 The data engine ([`wwv-data-engine`](https://github.com/silvertakana/wwv-data-engine), public) is a **content-agnostic runner**. It discovers and executes seeder scripts from a configurable directory; the engine itself knows nothing about specific data sources.
 
-- **Local development**: The engine runs via Docker Compose on port 5001, reading seeders dynamically from `local-seeders/` (split into `community` and `private` tiers).
-- **Production**: The engine container on Coolify downloads release bundles from `wwv-seeders-community` and `wwv-seeders-private` on startup, unzipping them into `/app/seeders`.
-- **Split-routing**: `resolveEngineUrl` prioritises the local dev engine (`ws://localhost:5001/stream`) for local testing — 12-Factor App methodology — and falls back to cloud-hosted endpoints (e.g. `wss://dataenginev2.worldwideview.dev/stream`) when nothing local is available.
+- **Local development**: The engine runs via Docker Compose on port 5000, reading seeders dynamically from `local-seeders/` (split into `community` and `private` tiers).
+- **Production**: The engine container on Coolify downloads release bundles from `wwv-seeders-community` and an internal seeders package on startup, unzipping them into `/app/seeders`.
+- **Split-routing**: `resolveEngineUrl` prioritises the local dev engine (`ws://localhost:5000/stream`) for local testing — 12-Factor App methodology — and falls back to cloud-hosted endpoints (e.g. `wss://dataenginev2.worldwideview.dev/stream`) when nothing local is available.
 
 ### Agnostic Frontend
 
@@ -160,7 +160,7 @@ When multiple entities share a screen-space cluster (busy ports, busy airspaces)
 
 ## Edition System
 
-WorldWideView ships in three editions, controlled by the `NEXT_PUBLIC_WWV_EDITION` environment variable. Feature flags are derived from this in [`src/core/edition.ts`](../src/core/edition.ts).
+WorldWideView ships in three editions, controlled at runtime by the `WWV_EDITION` environment variable (server-side), with `NEXT_PUBLIC_WWV_EDITION` kept as the build-time bake for the docker-publish images and client bundles. Precedence: `WWV_EDITION` → `NEXT_PUBLIC_WWV_EDITION` → `local`. Feature flags are derived from this in [`src/core/edition.ts`](../src/core/edition.ts).
 
 | Edition | Auth | Use case |
 |---|---|---|
@@ -176,8 +176,7 @@ Quick map of the load-bearing modules:
 
 | Path | Role |
 |---|---|
-| [`src/core/plugins/PluginManager.ts`](../src/core/plugins/PluginManager.ts) | Core plugin registry. Instantiates plugins, calls `initialize()`, manages lifecycle. |
-| [`src/core/plugins/loaders/InstalledPluginsLoader.ts`](../src/core/plugins/loaders/InstalledPluginsLoader.ts) | Dynamic ES module loader for marketplace plugins (`import(/* webpackIgnore: true */ entry)`). |
+| [`src/core/plugins/PluginManager.ts`](../src/core/plugins/PluginManager.ts) | Core plugin registry. Instantiates plugins, calls `initialize()`, manages lifecycle. Also loads marketplace plugins via `loadFromManifest` (dynamic ES module import, `import(/* webpackIgnore: true */ entry)`), driven by the `/api/marketplace/load` route and the `useMarketplaceSync` client hook. |
 | [`src/core/data/DataBus.ts`](../src/core/data/DataBus.ts) | Typed pub/sub singleton — the high-frequency event channel. |
 | [`src/core/data/WsClient.ts`](../src/core/data/WsClient.ts) | WebSocket router. Pipes engine `/stream` messages onto the DataBus. |
 | [`src/core/globe/GlobeView.tsx`](../src/core/globe/GlobeView.tsx) | The Cesium viewer container. Imagery layers, camera setup, primitive collection wiring. |

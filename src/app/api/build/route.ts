@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
+import { getEdition } from "@/core/edition";
 
 /**
  * GET /api/build
@@ -36,7 +37,7 @@ export async function GET() {
         public_flags: {
             agent_bus_enabled:
                 process.env.NEXT_PUBLIC_WWV_AGENT_BUS_ENABLED === "true",
-            edition: process.env.NEXT_PUBLIC_WWV_EDITION ?? null,
+            edition: getEdition(),
         },
     });
 }

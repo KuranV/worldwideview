@@ -15,11 +15,14 @@ import { DataConfigPanel } from "@/components/panels/DataConfig";
 import CameraStatsPanel from "@/components/panels/CameraStatsPanel";
 import { BottomPanelManager } from "@/components/layout/BottomPanelManager";
 import { TimelineSync } from "@/core/globe/TimelineSync";
+import { isGlobeSupported } from "@/core/globe/globeSupport";
 import { pluginManager } from "@/core/plugins/PluginManager";
 import { pluginRegistry } from "@/core/plugins/PluginRegistry";
 
 import { useStore } from "@/core/state/store";
 import { dataBus } from "@/core/data/DataBus";
+import { useAlertEngine } from "@/lib/alerts/engine";
+import { AlertToasts } from "@/components/alerts/AlertToasts";
 import { PanelToggleArrows } from "@/components/layout/PanelToggleArrows";
 import { FloatingVideoManager } from "@/components/video/FloatingVideoManager";
 import { BootOverlay } from "@/components/common/BootOverlay";
@@ -59,6 +62,12 @@ const GlobeView = dynamic(() => import("@/core/globe/GlobeView"), {
  * 4. Synchronization with the Cesium globe lifecycle.
  * 5. Managing the "Boot" animation sequence and HUD entry.
  */
+// Module-level guard: React 18 StrictMode double-mounts effects in dev, so
+// startPlatform would otherwise run twice (two pluginManager.init() calls and
+// a double registry walk on remount). Mirrors the bootStarted/startBootOnce
+// pattern used inside the effect below.
+let platformBootStarted = false;
+
 export function AppShell() {
     const initLayer = useStore((s) => s.initLayer);
     const boot = useBootSequence();
@@ -83,27 +92,44 @@ export function AppShell() {
 
     useEffect(() => {
         const startPlatform = async () => {
+            // StrictMode double-invoke guard: the second mount of a dev
+            // double-mount would re-init the plugin manager mid-boot.
+            // Mirrors the bootStarted/startBootOnce pattern below.
+            if (platformBootStarted) return;
+            platformBootStarted = true;
+
             initLogCatcher();
             console.log("[AppShell] Initializing Platform...");
 
-            // Inject host libraries for dynamic plugin loading
-            await injectHostGlobals();
-            setHostReady(true);
+            // Independent boot I/O runs concurrently. Dependency edges are
+            // preserved: host globals must be ready before any dynamic
+            // plugin import (hostReady gates useMarketplaceSync), and
+            // pluginManager.init() is awaited before the first
+            // registerPlugin. Only mutually independent work (env parsing,
+            // disabled-ids snapshot, registry iteration setup) is fanned out.
+            const [, disabledIds, demoDefaultPlugins] = await Promise.all([
+                injectHostGlobals().then(() => {
+                    setHostReady(true);
+                }),
+                Promise.resolve().then(() => getDisabledPluginIds()),
+                Promise.resolve().then(() => {
+                    // Setup demo defaults (independent env parsing)
+                    const defaults = new Set<string>();
+                    if (isDemo) {
+                        const envVar = process.env.NEXT_PUBLIC_DEMO_DEFAULT_PLUGINS || "";
+                        envVar.split(",").forEach((s) => {
+                            const clean = s.trim();
+                            if (clean) defaults.add(clean);
+                        });
+                    }
+                    return defaults;
+                }),
+                pluginManager.init(),
+            ]);
 
-            const disabledIds = getDisabledPluginIds();
-
-            // Setup demo defaults
-            const demoDefaultPlugins = new Set<string>();
-            if (isDemo) {
-                const envVar = process.env.NEXT_PUBLIC_DEMO_DEFAULT_PLUGINS || "";
-                envVar.split(",").forEach((s) => {
-                    const clean = s.trim();
-                    if (clean) demoDefaultPlugins.add(clean);
-                });
-            }
-
-            await pluginManager.init();
-
+            // Per-plugin register+enable stays sequential: the plugin
+            // manager holds shared state, so interleaving registrations
+            // across plugins is not safe.
             for (const plugin of pluginRegistry.getAll()) {
                 await pluginManager.registerPlugin(plugin);
                 let shouldEnable = false;
@@ -136,7 +162,12 @@ export function AppShell() {
         // Safety fallback: if the globe never initialises (e.g. WebGL unavailable
         // in headless CI environments), force the boot sequence after 20 s so the
         // app still reaches the "ready" state and tests are not left hanging.
-        const safetyTimer = setTimeout(() => startBootOnce("safety-timeout"), 20_000);
+        // Fail fast when the environment cannot construct a Cesium viewer at all
+        // (headless WebKit lacks OffscreenCanvas): the viewer fails instantly, so
+        // waiting the full 20 s would only delay app-ready without any chance of
+        // the globeReady event firing.
+        const safetyTimeoutMs = isGlobeSupported() ? 20_000 : 2_000;
+        const safetyTimer = setTimeout(() => startBootOnce("safety-timeout"), safetyTimeoutMs);
 
         startPlatform();
 
@@ -162,6 +193,11 @@ export function AppShell() {
         }
     }, [boot.phase, bootStart]);
     const activeBottomPanel = useStore((s) => s.activeBottomPanel);
+
+    // Alert engine (P2 backend core): evaluates enabled alert rules against
+    // live dataBus updates and emits `alertFired`. Headless — the UI agent
+    // builds the bell/badge/panel/toasts on top of the alertFired event.
+    useAlertEngine();
 
     const rootClasses = [
         "app-shell",
@@ -197,6 +233,7 @@ export function AppShell() {
         <FloatingVideoManager />
         {needsReload && <ReloadToast />}
         <ErrorToast />
+        <AlertToasts />
         <FeedbackDialog />
         {pendingUnverified.length > 0 && (
         <UnverifiedPluginBatchDialog

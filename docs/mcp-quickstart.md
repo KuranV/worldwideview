@@ -30,7 +30,7 @@ pnpm setup      # generates AUTH_SECRET and your local .env (required for API ke
 
 `pnpm setup` writes a random `AUTH_SECRET` into `.env`. In the local edition that same
 secret signs your MCP API keys, so this step is required before key generation will work.
-The edition defaults to `local` (`NEXT_PUBLIC_WWV_EDITION=local`).
+The edition defaults to `local` (`WWV_EDITION=local`, with fallback to the `NEXT_PUBLIC_WWV_EDITION` build-time bake).
 
 ---
 

@@ -17,6 +17,14 @@ export interface LayerState {
     entityCount: number;
     /** Whether the layer is currently waiting for a network response. */
     loading: boolean;
+    /** Server-provided ISO timestamp of the last snapshot received for this layer, if any. */
+    fetchedAt?: string;
+    /** The effective entity budget applied to this layer (set when data arrives). */
+    budgetCap?: number;
+    /** How many entities actually render after budget thinning. */
+    renderedCount?: number;
+    /** True when the incoming feed exceeded the budget and was thinned. */
+    budgetExceeded?: boolean;
 }
 
 /**
@@ -33,6 +41,10 @@ export interface LayersSlice {
     setEntityCount: (pluginId: string, count: number) => void;
     /** Updates the loading state indicator for a specific layer. */
     setLayerLoading: (pluginId: string, loading: boolean) => void;
+    /** Records the server-provided fetchedAt of the latest snapshot for freshness display. */
+    setLayerFetchedAt: (pluginId: string, fetchedAt: string | undefined) => void;
+    /** Records budget thinning outcome for a layer (never-silent truncation surfacing). */
+    setLayerBudget: (pluginId: string, budget: { budgetCap: number; renderedCount: number; budgetExceeded: boolean }) => void;
     /** Initializes a new layer entry in the state if it doesn't already exist. */
     initLayer: (pluginId: string, defaultEnabled?: boolean) => void;
     /** Completely removes a layer from the state. */
@@ -66,6 +78,18 @@ export const createLayersSlice: StateCreator<AppStore, [], [], LayersSlice> = (s
             layers: {
                 ...state.layers,
                 [pluginId]: { ...state.layers[pluginId], loading },
+            },
+        })),
+    setLayerFetchedAt: (pluginId, fetchedAt) => set((state) => ({
+            layers: {
+                ...state.layers,
+                [pluginId]: { ...state.layers[pluginId], fetchedAt },
+            },
+        })),
+    setLayerBudget: (pluginId, budget) => set((state) => ({
+            layers: {
+                ...state.layers,
+                [pluginId]: { ...state.layers[pluginId], ...budget },
             },
         })),
     initLayer: (pluginId, defaultEnabled = false) => set((state) => ({

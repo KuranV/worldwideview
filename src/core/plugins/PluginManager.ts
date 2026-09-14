@@ -15,6 +15,7 @@ import { trackEvent } from "@/lib/analytics";
 import { resolveEngineUrl } from "@/core/data/resolveEngineUrl";
 import { fetchLocalEngineManifest } from "@/core/data/engineManifest";
 import { pluginRegistry } from "@/core/plugins/PluginRegistry";
+import { getEdition } from "@/core/edition";
 
 /**
  * ManagedPlugin represents the internal state and instance of a registered data source.
@@ -117,7 +118,7 @@ class PluginManager {
             if (v && !envVars[k]) envVars[k] = v;
         }
 
-        const edition = (process.env.NEXT_PUBLIC_WWV_EDITION || "local") as "local" | "cloud" | "demo";
+        const edition = getEdition();
 
         if (Object.keys(envVars).length > 0) {
             console.debug(`[PluginManager] Injected ${Object.keys(envVars).length} custom env vars into "${plugin.id}"`);

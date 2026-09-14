@@ -252,7 +252,7 @@ await pluginManager.registerPlugin(plugin);
 `AppShell.tsx` iterates `pluginRegistry.getAll()` at startup.
 
 **B. Marketplace (database-installed):**
-`InstalledPluginsLoader` reads from the `installed_plugins` PostgreSQL table and calls `pluginManager.loadFromManifest()`. No code changes needed.
+The client hook `useMarketplaceSync` fetches manifests from `/api/marketplace/load` (backed by the `installed_plugins` PostgreSQL table) and calls `pluginManager.loadFromManifest()`. No code changes needed.
 
 **C. Dynamic import (runtime):**
 For user-imported GeoJSON layers, call `pluginManager.loadFromManifest(manifest)` directly.

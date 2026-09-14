@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/ba-session";
 import { issueMarketplaceToken } from "@/lib/marketplace/marketplaceToken";
 import type { MarketplaceSessionToken } from "@worldwideview/wwv-plugin-sdk";
 import { grantTokenLimiter } from "@/lib/rateLimiters";
@@ -11,7 +11,7 @@ import { getRequestOrigin } from "@/lib/origin";
 const ALLOWED_REDIRECT_HOSTS = new Set([
     "localhost",
     "127.0.0.1",
-    "worldwideview.dev",
+    "worldwideview.dev", // lint-url: allow (redirect host allowlist entry)
 ]);
 
 // Derive additional allowed redirect hosts from the configured marketplace URLs
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     const redirectTo = searchParams.get("redirectTo") ?? "";
 
     try {
-        const session = await auth();
+        const session = await getServerSession();
 
         if (!session?.user) {
             const origin = getRequestOrigin(request);
@@ -94,3 +94,5 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }
+
+export const runtime = "nodejs";

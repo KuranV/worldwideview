@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/ba-session";
 import { getSupabaseUser } from "@/lib/supabase/server";
 import { isCloud, isPluginInstallEnabled, isDemo, isDemoAdmin } from "@/core/edition";
 import { upsertPlugin } from "@/lib/marketplace/repository";
@@ -16,7 +16,7 @@ import { getRequestOrigin } from "@/lib/origin";
 const ALLOWED_REDIRECT_HOSTS = new Set([
     "localhost",
     "127.0.0.1",
-    "worldwideview.dev",
+    "worldwideview.dev", // lint-url: allow (redirect host allowlist entry)
 ]);
 
 if (process.env.ALLOWED_DEV_ORIGIN) {
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
         const rateLimited = installLimiter.check(getClientIp(request));
         if (rateLimited) return rateLimited;
 
-        // Auth: cloud edition uses Supabase session; local/demo uses NextAuth.
+        // Auth: cloud edition uses Supabase session; local/demo uses Better Auth.
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
         const isDummyUrl = !supabaseUrl || supabaseUrl.includes("dummy") || supabaseUrl.includes("xyz.supabase.co");
         const useSupabaseAuth = isCloud && !isDummyUrl;
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
             }
             userId = supabaseUser.id;
         } else {
-            const session = await auth();
+            const session = await getServerSession();
             if (!session?.user) {
                 const origin = getRequestOrigin(request);
                 const loginUrl = new URL("/login", origin);
@@ -170,3 +170,5 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }
+
+export const runtime = "nodejs";

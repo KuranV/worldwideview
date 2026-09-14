@@ -21,7 +21,7 @@ The core value proposition of WorldWideView is mapping diverse, decoupled intell
 - **Styling:** Vanilla CSS (no Tailwind) — `src/app/globals.css` and `src/styles/theme-tokens.css`
 
 ## Platform Support
-Built as a highly portable Next.js container, it supports multiple deployment profiles controlled by `NEXT_PUBLIC_WWV_EDITION` (default: `local`).
+Built as a highly portable Next.js container, it supports multiple deployment profiles. The edition is resolved at runtime from `WWV_EDITION` (falls back to the `NEXT_PUBLIC_WWV_EDITION` build-time bake, then `local`), so self-hosters can switch editions on a prebuilt image via a runtime .env without rebuilding.
 - **Local (`local`)**: Self-hosted, full features, auth enabled.
 - **Cloud (`cloud`)**: Managed cloud instance, full features.
 - **Demo (`demo`)**: Public demo, auth disabled, optional admin via `WWV_DEMO_ADMIN_SECRET`.

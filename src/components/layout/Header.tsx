@@ -12,14 +12,18 @@ import { useStore } from "@/core/state/store";
 import { dataBus } from "@/core/data/DataBus";
 import { pluginManager } from "@/core/plugins/PluginManager";
 import {
- Globe, Key, Sun, Moon, Monitor, Crosshair
+ Globe, Key, Sun, Moon, Monitor, Crosshair, LogOut
 } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
-import { isDemo, DEMO_ADMIN_ROLE } from "@/core/edition";
+import { isDemo, isDemoAdmin as isDemoAdminSession } from "@/core/edition";
+import { useBetterAuth } from "@/hooks/useBetterAuth";
 
 import Image from "next/image";
+
+const HUB_URL = process.env.NEXT_PUBLIC_HUB_URL ?? "https://worldwideview.dev"
 import { useIsMobile } from "@/core/hooks/useIsMobile";
 import { SearchBar } from "./SearchBar";
+import { authClient } from "@/lib/auth-client";
 import { ApiKeysTab } from "./ApiKeysTab";
 import { PersonalApiKeysSection } from "./PersonalApiKeysSection";
 import "./timeSelect.css";
@@ -64,8 +68,19 @@ export function Header() {
     const setTheme = useStore((s) => s.setTheme);
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const [isDemoAdmin, setIsDemoAdmin] = useState(false);
+    const { data: session } = useBetterAuth();
+    const isDemoAdmin = isDemoAdminSession(session);
     const [showApiKeys, setShowApiKeys] = useState(false);
+
+    const handleSignOut = async () => {
+        await authClient.signOut({
+            fetchOptions: {
+                onSuccess: () => {
+                    window.location.href = "/login";
+                },
+            },
+        });
+    };
 
     const [timeOpen, setTimeOpen] = useState(false);
     const timeRef = useRef<HTMLDivElement>(null);
@@ -75,14 +90,6 @@ export function Header() {
     const [themeOpen, setThemeOpen] = useState(false);
     const themeButtonRef = useRef<HTMLButtonElement>(null);
     const [themePos, setThemePos] = useState({ top: 0, right: 0 });
-
-    useEffect(() => {
-        if (!isDemo) return;
-        fetch("/api/auth/session")
-            .then((r) => r.json())
-            .then((s) => setIsDemoAdmin(s?.user?.role === DEMO_ADMIN_ROLE))
-            .catch(() => {});
-    }, []);
 
     useEffect(() => {
         const el = scrollContainerRef.current;
@@ -106,7 +113,7 @@ export function Header() {
             <header className="header header--mobile glass-panel">
               <div className="header__brand">
                 <a
-                  href="https://worldwideview.dev/"
+                  href={HUB_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
@@ -161,6 +168,25 @@ export function Header() {
                     </svg>
                   </button>
                 </div>
+                {!isDemo && (
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    title="Sign Out"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "6px",
+                      background: "transparent",
+                      border: "none",
+                      color: "var(--text-secondary)",
+                      gap: "4px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <LogOut size={16} />
+                  </button>
+                )}
                 <div className="status-badge">
                   <span className="status-badge__dot" />
                   LIVE
@@ -208,7 +234,7 @@ export function Header() {
       <>
         <header className="header glass-panel">
           <div className="header__brand">
-            <a href="https://worldwideview.dev/" target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}>
+            <a href={HUB_URL} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <Image src="/logo/logo-icon.svg" alt="Logo" width={22} height={22} style={{ objectFit: "contain" }} />
                 <div className="header__logo">WORLD WIDE VIEW</div>
@@ -335,6 +361,22 @@ export function Header() {
 }}
             />
             <div className="header__actions">
+              {!isDemo && (
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="btn btn--glow"
+                  title="Sign Out"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <LogOut size={14} />
+                  <span style={{ fontSize: "12px" }}>Sign Out</span>
+                </button>
+              )}
               <div className="status-badge">
                 <span className="status-badge__dot" />
                 LIVE

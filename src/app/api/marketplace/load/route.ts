@@ -9,7 +9,7 @@ import type { PluginManifest } from "@/core/plugins/PluginManifest";
 import { getVerifiedPluginIds } from "@/lib/marketplace/registryClient";
 
 import { isDemo, isDemoAdmin } from "@/core/edition";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/ba-session";
 import { seedDefaultPlugins } from "@/lib/marketplace/seedDefaultPlugins";
 import * as Sentry from "@sentry/nextjs";
 
@@ -37,7 +37,10 @@ export async function GET(request: Request) {
 
     try {
         const [records, verifiedIds] = await Promise.all([
-            prisma.installedPlugin.findMany(),
+            // Only enabled plugins belong in the runtime bootstrap. Disabled
+            // records (enabled: false) must stay out of the payload, otherwise
+            // a plugin the operator disabled reloads on the next refresh (#409).
+            prisma.installedPlugin.findMany({ where: { enabled: true } }),
             getVerifiedPluginIds(),
         ]);
 
@@ -124,7 +127,7 @@ export async function GET(request: Request) {
             });
 
         // Strip sensitive configuration fields on demo for non-admin visitors
-        if (isDemo && !isDemoAdmin(await auth())) {
+        if (isDemo && !isDemoAdmin(await getServerSession())) {
             for (const m of manifests) {
                 if (m.format === "declarative" && m.dataSource) {
                     // Only omit headers and potentially sensitive auth params.
@@ -144,3 +147,5 @@ export async function GET(request: Request) {
         return withCors(NextResponse.json({ manifests: [] }), request);
     }
 }
+
+export const runtime = "nodejs";

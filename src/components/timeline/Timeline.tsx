@@ -10,7 +10,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useStore } from "@/core/state/store";
-import { isHistoryEnabled as default_isHistoryEnabled, isDemo, DEMO_ADMIN_ROLE } from "@/core/edition";
+import { isHistoryEnabled as default_isHistoryEnabled, isDemoAdmin as isDemoAdminSession } from "@/core/edition";
+import { useBetterAuth } from "@/hooks/useBetterAuth";
 
 /**
  * @component Timeline
@@ -32,16 +33,12 @@ export function Timeline() {
     const timeRange = useStore((s) => s.timeRange);
 
     const [mounted, setMounted] = useState(false);
-    const [isDemoAdmin, setIsDemoAdmin] = useState(false);
+    const { data: session } = useBetterAuth();
+    const isDemoAdmin = isDemoAdminSession(session);
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setMounted(true);
-        if (!isDemo) return;
-        fetch("/api/auth/session")
-            .then((r) => r.json())
-            .then((s) => setIsDemoAdmin(s?.user?.role === DEMO_ADMIN_ROLE))
-            .catch(() => {});
     }, []);
 
     const isHistoryEnabled = default_isHistoryEnabled || isDemoAdmin;
@@ -83,7 +80,7 @@ export function Timeline() {
                     History unavailable on demo —
                     {" "}
                     <a
-                      href="https://worldwideview.dev"
+                      href={process.env.NEXT_PUBLIC_HUB_URL ?? "https://worldwideview.dev"}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="timeline__history-unavailable-link"

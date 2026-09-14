@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { resolveEdition } from "./edition";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { resolveEdition, resolveServerEdition, getEdition } from "./edition";
 import type { Edition } from "./edition";
 
 describe("resolveEdition", () => {
@@ -37,6 +37,72 @@ describe("resolveEdition", () => {
         for (const val of invalid) {
             expect(resolveEdition(val)).toBe("local" satisfies Edition);
         }
+    });
+});
+
+describe("resolveServerEdition (runtime resolution)", () => {
+    const ORIGINAL_ENV = { ...process.env };
+
+    beforeEach(() => {
+        vi.resetModules();
+        process.env = { ...ORIGINAL_ENV };
+        delete process.env.WWV_EDITION;
+        delete process.env.NEXT_PUBLIC_WWV_EDITION;
+    });
+
+    afterEach(() => {
+        vi.unstubAllEnvs();
+    });
+
+    it("falls back to 'local' when no edition env var is set", async () => {
+        const { resolveServerEdition: rs } = await import("./edition");
+        expect(rs()).toBe("local");
+    });
+
+    it("uses the runtime WWV_EDITION when set", async () => {
+        vi.stubEnv("WWV_EDITION", "demo");
+        const { resolveServerEdition: rs } = await import("./edition");
+        expect(rs()).toBe("demo");
+    });
+
+    it("lets the runtime WWV_EDITION override the build-time NEXT_PUBLIC_ bake", async () => {
+        vi.stubEnv("NEXT_PUBLIC_WWV_EDITION", "cloud");
+        vi.stubEnv("WWV_EDITION", "demo");
+        const { resolveServerEdition: rs } = await import("./edition");
+        expect(rs()).toBe("demo");
+    });
+
+    it("falls back to the NEXT_PUBLIC_ bake when WWV_EDITION is unset", async () => {
+        vi.stubEnv("NEXT_PUBLIC_WWV_EDITION", "cloud");
+        const { resolveServerEdition: rs } = await import("./edition");
+        expect(rs()).toBe("cloud");
+    });
+
+    it("ignores an empty WWV_EDITION and falls back to the bake", async () => {
+        vi.stubEnv("WWV_EDITION", "");
+        vi.stubEnv("NEXT_PUBLIC_WWV_EDITION", "demo");
+        const { resolveServerEdition: rs } = await import("./edition");
+        expect(rs()).toBe("demo");
+    });
+
+    it("falls back to 'local' for an invalid runtime value", async () => {
+        vi.stubEnv("WWV_EDITION", "staging");
+        const { resolveServerEdition: rs } = await import("./edition");
+        expect(rs()).toBe("local");
+    });
+
+    it("is case-insensitive and trims whitespace", async () => {
+        vi.stubEnv("WWV_EDITION", "  CLOUD  ");
+        const { resolveServerEdition: rs } = await import("./edition");
+        expect(rs()).toBe("cloud");
+    });
+
+    it("getEdition() re-reads env on every call (request-time freshness)", async () => {
+        vi.stubEnv("WWV_EDITION", "demo");
+        const { getEdition: ge } = await import("./edition");
+        expect(ge()).toBe("demo");
+        vi.stubEnv("WWV_EDITION", "local");
+        expect(ge()).toBe("local");
     });
 });
 

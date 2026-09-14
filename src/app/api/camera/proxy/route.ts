@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/ba-session";
 import { isAuthEnabled } from "@/core/edition";
 import { cameraProxyLimiter } from "@/lib/rateLimiters";
 import { getClientIp } from "@/lib/rateLimit";
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     if (rateLimited) return rateLimited;
 
     if (isAuthEnabled) {
-        const session = await auth();
+        const session = await getServerSession();
         if (!session?.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
@@ -60,3 +60,10 @@ export async function GET(req: NextRequest) {
         );
     }
 }
+
+// Live camera proxy — never statically collected at build time. This route
+// must evaluate per-request (it proxies arbitrary live URLs), and keeping it
+// dynamic also prevents build-time module evaluation of safeFetch/undici.
+export const dynamic = "force-dynamic";
+
+export const runtime = "nodejs";

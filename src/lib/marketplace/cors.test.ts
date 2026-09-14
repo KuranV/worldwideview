@@ -21,13 +21,13 @@ describe("CORS utility", () => {
         });
 
         it("returns production origin when matched", () => {
-            const headers = corsHeaders(fakeRequest("https://marketplace.worldwideview.dev"));
-            expect(headers["Access-Control-Allow-Origin"]).toBe("https://marketplace.worldwideview.dev");
+const headers = corsHeaders(fakeRequest("https://marketplace.worldwideview.dev")); // lint-url: allow (test assertion)
+expect(headers["Access-Control-Allow-Origin"]).toBe("https://marketplace.worldwideview.dev"); // lint-url: allow (test assertion)
         });
 
         it("returns allowed origin for local network IPs", () => {
-            const headers1 = corsHeaders(fakeRequest("http://192.168.68.53:3001"));
-            expect(headers1["Access-Control-Allow-Origin"]).toBe("http://192.168.68.53:3001");
+            const headers1 = corsHeaders(fakeRequest("http://192.0.2.53:3001"));
+            expect(headers1["Access-Control-Allow-Origin"]).toBe("http://192.0.2.53:3001");
 
             const headers2 = corsHeaders(fakeRequest("http://10.0.0.5:8080"));
             expect(headers2["Access-Control-Allow-Origin"]).toBe("http://10.0.0.5:8080");

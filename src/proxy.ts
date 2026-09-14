@@ -1,17 +1,33 @@
 /* eslint-disable no-console */
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
-import { isDemo, isHttpsDeployment } from "@/core/edition";
+import { isDemo, getEdition } from "@/core/edition";
+import { hasBetterAuthCookie } from "@/lib/proxy-auth";
 
-const workspaceCache = new Map<string, { status: string; expiresAt: number }>();
+const HUB_REDIRECT_URL = process.env.NEXT_PUBLIC_HUB_REDIRECT_URL ?? "https://worldwideview.dev/hub"
+const TENANT_DOMAIN = process.env.NEXT_PUBLIC_WWV_TENANT_DOMAIN ?? ".app.worldwideview.dev"
+
+const workspaceCache = new Map<string, { status: string; plan: string; tier: string; locked: boolean; lockedReason: string | null; expiresAt: number }>();
 const CACHE_TTL = 60_000; // 60 seconds
 
 // Anchored static-asset allowlist. Only requests ending in a real asset
 // extension bypass the auth gate. This replaces the former `path.includes(".")`
 // check, which let ANY dotted path (e.g. `/secret.page`, `/globe.config`)
-// skip authentication entirely.
-const STATIC_ASSET_RE = /\.(?:js|mjs|cjs|css|map|json|txt|xml|webmanifest|ico|png|jpe?g|gif|svg|webp|avif|bmp|woff2?|ttf|otf|eot|wasm|mp4|webm|glb|gltf)$/i;
+// skip authentication entirely. Implemented as a Set lookup on the trailing
+// extension (case-insensitive) instead of a regex: identical semantics, but no
+// regex evaluated against request-controlled paths.
+const STATIC_ASSET_EXTENSIONS = new Set([
+    "js", "mjs", "cjs", "css", "map", "json", "geojson", "txt", "xml",
+    "webmanifest", "ico", "png", "jpg", "jpeg", "gif", "svg", "webp",
+    "avif", "bmp", "woff", "woff2", "ttf", "otf", "eot", "wasm", "mp4",
+    "webm", "glb", "gltf",
+]);
+
+function isStaticAssetPath(path: string): boolean {
+    const dot = path.lastIndexOf(".");
+    if (dot === -1 || dot === path.length - 1) return false;
+    return STATIC_ASSET_EXTENSIONS.has(path.slice(dot + 1).toLowerCase());
+}
 
 // API routes that must stay reachable WITHOUT a logged-in session cookie.
 // Everything else under /api is deny-by-default (requires a valid session JWT).
@@ -25,37 +41,27 @@ const STATIC_ASSET_RE = /\.(?:js|mjs|cjs|css|map|json|txt|xml|webmanifest|ico|pn
 //    before their own auth runs, breaking install/manage from the marketplace origin.
 //  - glitchtip-tunnel/build/dev: telemetry/diagnostics (dev/* is NODE_ENV-gated to 403 in prod).
 const PUBLIC_API_PREFIXES = [
+    "/api/access-code",
     "/api/auth",
-    "/api/internal/workspace",
-    "/api/health",
+    "/api/ba",
     "/api/billing/webhook",
-    "/api/mcp",
-    "/api/globe",
-    "/api/v1/entities",
-    "/api/marketplace",
-    "/api/glitchtip-tunnel",
     "/api/build",
     "/api/dev",
+    "/api/glitchtip-tunnel",
+    "/api/globe",
+    "/api/health",
+    "/api/instance",
+    "/api/internal/workspace",
+    "/api/marketplace",
+    "/api/mcp",
+    "/api/places",
+    "/api/provision",
+    "/api/service",
+    "/api/v1/entities",
 ];
 
 function isPublicApiPath(path: string): boolean {
     return PUBLIC_API_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
-}
-
-// Resolve the Auth.js session token, handling the __Secure- cookie prefix used
-// behind a TLS-terminating reverse proxy (the public URL is https but the
-// request reaching us may be plain http). Detect via X-Forwarded-Proto / AUTH_URL.
-async function getSessionToken(req: NextRequest) {
-    // Request-aware OR the deploy-wide https signal (isHttpsDeployment), so the
-    // reader agrees with the cookie writer (auth.ts) on the __Secure- prefix.
-    const isSecure = req.headers.get("x-forwarded-proto") === "https"
-        || isHttpsDeployment()
-        || req.nextUrl.protocol === "https:";
-    return getToken({
-        req,
-        secret: process.env.AUTH_SECRET,
-        secureCookie: isSecure,
-    });
 }
 
 async function resolveWorkspace(subdomain: string) {
@@ -94,12 +100,12 @@ export default async function proxy(req: NextRequest) {
     // Extract subdomain if on cloud
     const hostname = req.headers.get("host") || "";
     let tenantSubdomain = null;
-    const isCloudDeploy = process.env.NEXT_PUBLIC_WWV_EDITION === "cloud";
+    const isCloudDeploy = getEdition() === "cloud";
 
     if (isCloudDeploy) {
-        const isApp = hostname.includes(".app.worldwideview.dev") || hostname.includes(".localhost");
+        const isApp = hostname.includes(TENANT_DOMAIN) || hostname.includes(".localhost");
         if (isApp) {
-            const subdomain = hostname.replace(".app.worldwideview.dev", "").replace(".localhost", "").split(":")[0];
+            const subdomain = hostname.replace(TENANT_DOMAIN, "").replace(".localhost", "").split(":")[0];
             if (subdomain && subdomain !== "app" && subdomain !== "localhost") {
                 tenantSubdomain = subdomain;
             }
@@ -137,8 +143,8 @@ export default async function proxy(req: NextRequest) {
             return res;
         }
 
-        const apiToken = await getSessionToken(req);
-        if (apiToken) {
+        // Auth gate: Better Auth session cookie
+        if (hasBetterAuthCookie(req)) {
             if (tenantSubdomain) res.headers.set("x-tenant-subdomain", tenantSubdomain);
             return res;
         }
@@ -155,7 +161,7 @@ export default async function proxy(req: NextRequest) {
         path.startsWith("/_next")
         || path.startsWith("/data")
         || path.startsWith("/cesium")
-        || STATIC_ASSET_RE.test(path)
+        || isStaticAssetPath(path)
     ) {
         const res = NextResponse.next();
         res.headers.delete("x-tenant-subdomain");
@@ -173,10 +179,21 @@ export default async function proxy(req: NextRequest) {
         if (workspaceInfo.status === "suspended" && !path.startsWith("/suspended")) {
             return NextResponse.redirect(new URL("/suspended", req.url));
         }
+        if (workspaceInfo.locked && !path.startsWith("/locked")) {
+            if (path.startsWith("/api/")) {
+                return new NextResponse(
+                    JSON.stringify({ error: "Workspace locked", reason: workspaceInfo.lockedReason }),
+                    { status: 403, headers: { "Content-Type": "application/json" } },
+                );
+            }
+            const lockUrl = new URL("/locked", req.url);
+            lockUrl.searchParams.set("reason", workspaceInfo.lockedReason || "This workspace is locked. Contact the workspace owner.");
+            return NextResponse.redirect(lockUrl);
+        }
     }
 
     // Auth pages: always accessible
-    if (path.startsWith("/setup") || path.startsWith("/login")) {
+    if (path.startsWith("/setup") || path.startsWith("/login") || path.startsWith("/locked")) {
         const res = NextResponse.next();
         if (tenantSubdomain) res.headers.set("x-tenant-subdomain", tenantSubdomain);
         return res;
@@ -185,17 +202,15 @@ export default async function proxy(req: NextRequest) {
     // Root Domain (Control Plane) Routing
     if (isCloudDeploy && !tenantSubdomain) {
         // Redirect apex app domain to the external marketing/hub site
-        if (path === "/" || path === "/register" || path === "/dashboard" || path === "/create-workspace") {
-            return NextResponse.redirect("https://worldwideview.dev/hub");
+        // Empty HUB_REDIRECT_URL means skip redirect entirely (local dev mode)
+        if (HUB_REDIRECT_URL && (path === "/" || path === "/register" || path === "/dashboard" || path === "/create-workspace")) {
+            return NextResponse.redirect(HUB_REDIRECT_URL);
         }
     }
 
-    // Check the Auth.js session cookie for page requests (the helper handles the
-    // __Secure- cookie prefix used behind a TLS-terminating reverse proxy).
-    const token = await getSessionToken(req);
-
-    if (token) {
-        // User is logged in, allow through
+    // Auth gate: Better Auth session cookie presence
+    if (hasBetterAuthCookie(req)) {
+        // User has a Better Auth session cookie, allow through
         const res = NextResponse.next();
         if (tenantSubdomain) res.headers.set("x-tenant-subdomain", tenantSubdomain);
         return res;

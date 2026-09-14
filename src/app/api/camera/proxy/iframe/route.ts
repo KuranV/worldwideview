@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/ba-session";
 import { isAuthEnabled } from "@/core/edition";
 import { cameraProxyLimiter } from "@/lib/rateLimiters";
 import { getClientIp } from "@/lib/rateLimit";
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     if (rateLimited) return rateLimited;
 
     if (isAuthEnabled) {
-        const session = await auth();
+        const session = await getServerSession();
         if (!session?.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
@@ -101,3 +101,11 @@ export async function GET(req: NextRequest) {
         );
     }
 }
+
+// Live camera proxy — never statically collected at build time.
+// Next.js would otherwise evaluate this module (and the undici fetch/Agent
+// import via safeFetch) during build config collection, which breaks under
+// undici v8 on Node 26 with `util.markAsUncloneable is not a function`.
+export const dynamic = "force-dynamic";
+
+export const runtime = "nodejs";

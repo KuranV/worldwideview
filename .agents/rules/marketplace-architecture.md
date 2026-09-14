@@ -7,8 +7,8 @@ paths:
 
 # Marketplace Architecture
 
-## 1. InstalledPluginsLoader
-Marketplace plugins are dynamically loaded via `InstalledPluginsLoader`. At startup, this service queries the PostgreSQL database (`installed_plugins` table) for dynamically installed manifests.
+## 1. Marketplace Sync
+Marketplace plugins are dynamically loaded via the client hook `useMarketplaceSync`. On boot and window focus, it fetches `/api/marketplace/load` (backed by the `installed_plugins` PostgreSQL table) and calls `pluginManager.loadFromManifest()` for each manifest.
 
 ## 2. Dynamic Bundle Loading
 Plugins from the marketplace use the `bundle` format and are imported at runtime from CDN endpoints (e.g., unpkg) via `loadPluginFromManifest()`.

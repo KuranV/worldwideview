@@ -82,4 +82,14 @@ describe('layersSlice', () => {
         store.getState().setLayerLoading('test-plugin', false);
         expect(store.getState().layers['test-plugin'].loading).toBe(false);
     });
+
+    it('records and clears the server-provided fetchedAt timestamp', () => {
+        store.getState().initLayer('test-plugin');
+
+        store.getState().setLayerFetchedAt('test-plugin', '2026-01-15T12:00:00Z');
+        expect(store.getState().layers['test-plugin'].fetchedAt).toBe('2026-01-15T12:00:00Z');
+
+        store.getState().setLayerFetchedAt('test-plugin', undefined);
+        expect(store.getState().layers['test-plugin'].fetchedAt).toBeUndefined();
+    });
 });

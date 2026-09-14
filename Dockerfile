@@ -34,6 +34,15 @@ ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ARG NEXT_PUBLIC_WWV_AGENT_BUS_ENABLED
 ARG NEXT_PUBLIC_WWV_BUILD_ID
 ARG NEXT_PUBLIC_WWV_BUILD_AT
+ARG NEXT_PUBLIC_SENTRY_DSN
+
+# Runtime edition override. Defaults to the build-time bake so a container
+# started without WWV_EDITION behaves exactly like the image it was built
+# from. Operators can override it at runtime via a .env (docker compose
+# pass-through) — the app resolves WWV_EDITION at request time and falls
+# back to the NEXT_PUBLIC_ bake when it is unset.
+ARG WWV_EDITION=${NEXT_PUBLIC_WWV_EDITION}
+ENV WWV_EDITION=${WWV_EDITION}
 
 # Run our pregenerate schema swap script and then generate Prisma client
 RUN NEXT_PUBLIC_WWV_EDITION=$NEXT_PUBLIC_WWV_EDITION pnpm run generate
@@ -75,6 +84,7 @@ RUN set +e ; { \
         if [ -n "$NEXT_PUBLIC_SUPABASE_URL" ]; then echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL" ; fi ; \
         if [ -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY" ; fi ; \
         if [ -n "$NEXT_PUBLIC_DEMO_DEFAULT_PLUGINS" ]; then echo "NEXT_PUBLIC_DEMO_DEFAULT_PLUGINS=$NEXT_PUBLIC_DEMO_DEFAULT_PLUGINS" ; fi ; \
+        if [ -n "$NEXT_PUBLIC_SENTRY_DSN" ]; then echo "NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN" ; fi ; \
     } > /app/.env.production.local
 
 # Run Next.js build with Webpack cache mounted
@@ -93,7 +103,12 @@ RUN npm install -g prisma@7.5.0 pm2@latest
 
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
+ENV NODE_OPTIONS=--max-old-space-size=768
 ENV PORT=3000
+# Runtime edition — resolved by the app at request time. Set WWV_EDITION
+# at container runtime (e.g. a .env passed to docker compose) to switch
+# editions on the prebuilt image without rebuilding. When unset, the app
+# falls back to the NEXT_PUBLIC_WWV_EDITION build-time bake, then 'local'.
 # DATABASE_URL must be provided via environment variable (no default)
 # Example: postgresql://user:pass@host:5432/dbname
 ENV AUTH_TRUST_HOST=true
@@ -127,6 +142,13 @@ COPY --from=builder /app/.build-at ./.build-at
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN sed -i 's/\r$//' ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
+
+LABEL org.opencontainers.image.title="WorldWideView"
+LABEL org.opencontainers.image.description="Real-time geospatial intelligence engine — visualize live global events, conflicts, and satellite data on an interactive 3D globe"
+LABEL org.opencontainers.image.url="https://worldwideview.dev"
+LABEL org.opencontainers.image.source="https://github.com/silvertakana/worldwideview"
+LABEL org.opencontainers.image.licenses="EL-2.0"
+LABEL org.opencontainers.image.vendor="WorldWideView"
 
 EXPOSE 3000 3001
 

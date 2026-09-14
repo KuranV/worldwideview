@@ -1,11 +1,19 @@
 /**
  * Edition detection module.
  *
- * Reads NEXT_PUBLIC_WWV_EDITION from the environment and exposes
- * typed constants + feature-flag helpers for the rest of the codebase.
+ * The edition is resolved from the environment at RUNTIME on the server,
+ * so self-hosters can pull the prebuilt image and switch editions via a
+ * runtime .env without rebuilding.
  *
- * Use the NEXT_PUBLIC_ prefix so the value is available on both
- * server and client (Next.js inlines it at build time).
+ * Precedence (server-side, evaluated at request/module-load time):
+ *   1. WWV_EDITION            — runtime env var (settable in a runtime .env)
+ *   2. NEXT_PUBLIC_WWV_EDITION — build-time baked value (kept for the
+ *                                docker-publish :latest/:cloud/:demo builds)
+ *   3. "local"                — fallback when both are unset/invalid
+ *
+ * Client bundles still receive the NEXT_PUBLIC_ build-time bake; server
+ * code should prefer `getEdition()` / `resolveServerEdition()` so runtime
+ * overrides apply.
  */
 
 // ---------------------------------------------------------------------------
@@ -30,10 +38,33 @@ export function resolveEdition(raw?: string): Edition {
     return "local";
 }
 
+/**
+ * Server-side runtime edition resolution.
+ *
+ * Reads `WWV_EDITION` first (runtime, settable via a runtime .env on the
+ * prebuilt image), then falls back to the build-time baked
+ * `NEXT_PUBLIC_WWV_EDITION`. Never inlined into client bundles — call this
+ * only from server code (route handlers, middleware, instrumentation).
+ */
+export function resolveServerEdition(): Edition {
+    const runtime = process.env.WWV_EDITION;
+    if (runtime !== undefined && runtime.trim() !== "") {
+        return resolveEdition(runtime);
+    }
+    return resolveEdition(process.env.NEXT_PUBLIC_WWV_EDITION);
+}
+
 /** Current deployment edition — determined once at module load. */
-export const edition: Edition = resolveEdition(
-    process.env.NEXT_PUBLIC_WWV_EDITION,
-);
+export const edition: Edition = resolveServerEdition();
+
+/**
+ * Fresh edition lookup for request-scoped server code.
+ * Unlike the module-load `edition` constant, this re-reads the env on every
+ * call, so tests (vi.stubEnv) and runtime .env overrides apply immediately.
+ */
+export function getEdition(): Edition {
+    return resolveServerEdition();
+}
 
 // ---------------------------------------------------------------------------
 // Boolean helpers
@@ -62,7 +93,7 @@ export const isDemo: boolean = edition === "demo";
  * name is in play behind a TLS-terminating reverse proxy.
  */
 export function isHttpsDeployment(): boolean {
-    const authUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "";
+    const authUrl = process.env.BETTER_AUTH_URL ?? process.env.AUTH_URL ?? "";
     return authUrl.startsWith("https://") || process.env.NODE_ENV === "production";
 }
 
@@ -72,13 +103,18 @@ export function isHttpsDeployment(): boolean {
 
 /**
  * Server-side secret used as the admin password on the demo edition.
- * Set `WWV_DEMO_ADMIN_SECRET` in `.env` — never use `NEXT_PUBLIC_`.
+ * Checks multiple env vars for backward compatibility with migration:
+ *   `WWV_ADMIN_PASSWORD` (preferred) → `ADMIN_PASSWORD` → `WWV_DEMO_ADMIN_SECRET` (legacy).
+ * Never use `NEXT_PUBLIC_` prefix.
  * When configured on demo, enables plugin management for the instance.
  */
-const DEMO_ADMIN_SECRET: string | undefined = process.env.WWV_DEMO_ADMIN_SECRET?.trim() || undefined;
+const ADMIN_PASSWORD: string | undefined =
+    (process.env.WWV_ADMIN_PASSWORD?.trim() ||
+     process.env.ADMIN_PASSWORD?.trim() ||
+     process.env.WWV_DEMO_ADMIN_SECRET?.trim()) || undefined;
 
 /** True when demo edition has an admin secret configured. */
-export const isDemoAdminConfigured: boolean = isDemo && !!DEMO_ADMIN_SECRET;
+export const isDemoAdminConfigured: boolean = isDemo && !!ADMIN_PASSWORD;
 
 // ---------------------------------------------------------------------------
 // Feature flags (derived from edition)
@@ -111,7 +147,7 @@ export const isHistoryEnabled: boolean = !isDemo;
  */
 export function getDemoAdminSecret(): string | undefined {
     if (!isDemo) return undefined;
-    return DEMO_ADMIN_SECRET;
+    return ADMIN_PASSWORD;
 }
 
 /** Demo admin session role constant. */
@@ -137,8 +173,13 @@ export function ticketAuthEnabledForPlugin(pluginId: string): boolean {
  * Returns `true` when the session belongs to the demo admin user.
  * Accepts any session-like object (uses runtime narrowing to avoid
  * type conflicts with Auth.js `Session` which doesn't declare `role`).
+ *
+ * An operator with the standard `admin` role is the demo admin;
+ * `demo-admin` is kept for legacy seeded accounts.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function isDemoAdmin(session: any): boolean {
-    return isDemo && session?.user?.role === DEMO_ADMIN_ROLE;
+    if (!isDemo) return false;
+    const role = session?.user?.role;
+    return role === DEMO_ADMIN_ROLE || role === "admin";
 }

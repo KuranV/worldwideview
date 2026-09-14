@@ -6,7 +6,7 @@
  * connection, cutting command latency from ~1500ms to near-real-time.
  *
  * Auth (R-2 dual-auth, mirrors GET /api/globe/commands):
- *   Primary:  NextAuth session cookie (browser path)
+ *   Primary:  Better Auth session cookie (browser path)
  *   Fallback: Bearer API key (MCP / programmatic path)
  *   userId comes ONLY from the resolved auth result -- never from the URL.
  *
@@ -18,11 +18,11 @@
  */
 
 import { NextResponse } from "next/server";
-import { auth as getSession } from "@/lib/auth";
+import { getServerSession } from "@/lib/ba-session";
 import { authenticateApiKey } from "@/lib/apiKeyAuth";
 import { drainGlobeCommands } from "@/lib/globeCommandQueue";
 import { globeCommandsStreamLimiter, getClientIp } from "@/lib/rateLimiters";
-import { resolveEdition } from "@/core/edition";
+import { getEdition } from "@/core/edition";
 
 const SESSION_ID_RE = /^[0-9a-f-]{36}$/i;
 const POLL_INTERVAL_MS = 200;
@@ -46,15 +46,15 @@ export async function GET(request: Request): Promise<Response> {
     if (limited) return limited as Response;
 
     // Gate 2: demo edition -- read env at request time so vi.stubEnv works in tests
-    const currentEdition = resolveEdition(process.env.NEXT_PUBLIC_WWV_EDITION);
+    const currentEdition = getEdition();
     if (currentEdition === "demo") {
         return NextResponse.json({ error: "Demo mode" }, { status: 403 }) as Response;
     }
 
-    // Gate 3: dual-auth -- session primary, Bearer API key fallback
+    // Gate 3: dual-auth -- Better Auth session primary, Bearer API key fallback
     let userId: string | null = null;
 
-    const session = await getSession();
+    const session = await getServerSession();
     if (session?.user?.id) {
         userId = session.user.id;
     } else {
@@ -122,3 +122,5 @@ export async function GET(request: Request): Promise<Response> {
 
     return new Response(stream, { headers: SSE_HEADERS });
 }
+
+export const runtime = "nodejs";

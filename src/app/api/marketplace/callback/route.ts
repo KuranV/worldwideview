@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import * as client from "openid-client";
 import { encryptCredential } from "@/lib/auth/encryption";
 import { prisma as db } from "@/lib/db";
+import { getServerSession } from "@/lib/ba-session";
+import { isDemo, isDemoAdmin } from "@/core/edition";
 
 function redirectWith(query: Record<string, string>, req: NextRequest) {
     const params = new URLSearchParams(query);
@@ -21,6 +23,13 @@ function redirectWith(query: Record<string, string>, req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+    if (isDemo) {
+        const session = await getServerSession();
+        if (!session?.user || !isDemoAdmin(session)) {
+            return redirectWith({ error: "admin_required" }, req);
+        }
+    }
+
     const isHttps = req.nextUrl.protocol === "https:";
     const cookiePrefix = isHttps ? "__Host-" : "";
 
@@ -36,7 +45,7 @@ export async function GET(req: NextRequest) {
         return redirectWith({ error: "missing_verifier" }, req);
     }
 
-    const mpUrl = process.env.NEXT_PUBLIC_WWV_MARKETPLACE_URL || "https://app.worldwideview.dev";
+    const mpUrl = process.env.NEXT_PUBLIC_WWV_MARKETPLACE_URL || "https://marketplace.worldwideview.dev";
     const issuer = new URL(mpUrl);
 
     try {
